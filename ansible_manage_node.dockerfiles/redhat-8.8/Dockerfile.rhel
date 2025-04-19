@@ -1,0 +1,48 @@
+# Dockerfile.rhel
+FROM registry.access.redhat.com/ubi8/ubi:8.8
+LABEL maintainer="hankstsai7211@gmail.com"
+
+# 更新套件並安裝必要工具
+RUN dnf update -y \
+ && dnf install -y \
+    openssh-server sudo curl wget bash-completion openssl \
+ # 產生 host keys，否則 sshd 無法啟動
+ && ssh-keygen -A \
+ && dnf clean all
+
+# Setting the .SSH
+RUN mkdir -p /home/docker/.ssh \
+ && chown docker:docker /home/docker/.ssh
+
+# 建立 SSH daemon 所需目錄，並開放 root 登入
+RUN mkdir /var/run/sshd \
+ && echo 'root:root' | chpasswd \
+ && sed -i 's/^#PermitRootLogin.*/PermitRootLogin yes/' /etc/ssh/sshd_config
+
+# 修正 PAM 設定，避免登出後 session 無法維持
+RUN sed -i 's@session\s*required\s*pam_loginuid.so@session optional pam_loginuid.so@g' /etc/pam.d/sshd
+
+# 環境變數：讓使用者檔案中可見
+ENV NOTVISIBLE="in users profile"
+RUN echo "export VISIBLE=now" >> /etc/profile
+
+# 建立 docker 使用者，並設定無密碼 sudo
+RUN useradd --create-home --shell /bin/bash \
+      --password $(openssl passwd -1 docker) docker \
+ && echo 'docker ALL=(ALL) NOPASSWD: ALL' >> /etc/sudoers
+
+# 匯入公鑰到 docker 使用者帳號
+RUN mkdir -p /home/docker/.ssh \
+ && curl -fsSL https://raw.githubusercontent.com/chusiang/ansible-jupyter.dockerfile/master/files/ssh/id_rsa.pub \
+      -o /home/docker/.ssh/authorized_keys \
+ && chown -R docker:docker /home/docker/.ssh \
+ && chmod 700 /home/docker/.ssh \
+ && chmod 644 /home/docker/.ssh/authorized_keys
+
+# 開放 SSH 連線埠
+EXPOSE 22
+
+# 啟動 sshd
+CMD ["/usr/sbin/sshd", "-D"]
+# CMD ["sh","-c","ssh-keygen -A && exec /usr/sbin/sshd -D"]
+

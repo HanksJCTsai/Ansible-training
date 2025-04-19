@@ -1,0 +1,51 @@
+version: '3.8'
+
+services:
+  ubuntu22:
+    build:
+      context: .
+      dockerfile: ubuntu-24.04/Dockerfile.ubuntu
+    image: ansi_ubuntu24.04:1.0.0
+    container_name: ubuntu22
+    environment:
+      TZ: Asia/Taipei
+    ports:
+      - "2222:22"            # 本機 2222 -> 容器 SSH 22
+    volumes:
+      - ./host_ssh_keys/ubuntu/authorized_keys:/home/docker/.ssh/authorized_keys:ro  # Bind mount using host directory
+    healthcheck:
+      test: ["CMD", "sshd", "-T"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+    restart: unless-stopped
+    labels:
+      com.example.service: "ubuntu22"
+      com.example.ansible: "true"
+
+  rhel8:
+    build:
+      context: .
+      dockerfile: redhat-8.8/Dockerfile.rhel
+    image: ansi_rhel8:1.0.0
+    container_name: rhel8
+    environment:
+      TZ: Asia/Taipei
+    ports:
+      - "2223:22"            # 本機 2223 -> 容器 SSH 22
+    volumes:
+      - ./host_ssh_keys/rhel/authorized_keys:/home/docker/.ssh/authorized_keys:ro
+    healthcheck:
+      test: ["CMD", "sshd", "-T"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+    restart: unless-stopped
+    labels:
+      com.example.service: "rhel8"
+      com.example.ansible: "true"
+
+# Ansible inventory example (inventory.ini):
+# [linux_hosts]
+# ubuntu22 ansible_host=127.0.0.1 ansible_user=docker ansible_port=2222
+# rhel8   ansible_host=127.0.0.1 ansible_user=docker ansible_port=2223
